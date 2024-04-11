@@ -13,12 +13,14 @@ type GBA struct {
 	display [][]color.RGBA
 
 	cpu  *cpu
+	bios *bios
 	cart *cart
 }
 
 func NewGBA(rom []byte) *GBA {
 	gba := &GBA{}
 	gba.cpu = newCpu(gba, rom)
+	gba.bios = newBios()
 	gba.cart = newCart(rom)
 
 	for i := 0; i < ScreenWidth; i++ {
@@ -46,9 +48,9 @@ func (gba *GBA) GetDisplay() [][]color.RGBA {
 	return gba.display
 }
 
-func (gba *GBA) read16(addr uint32) uint16 {
-	if addr <= 0x00003FFF {
-		// BIOS - System ROM
+func (gba *GBA) read32(addr uint32) uint32 {
+	if addr <= 0x00003FFF { // BIOS - System ROM
+		return gba.bios.read32(addr)
 	} else if addr <= 0x01FFFFFF {
 		panic("0x00004000-0x01FFFFFF: not used")
 	} else if addr <= 0x0203FFFF {

@@ -24,8 +24,6 @@ func newCpu(gba *GBA, rom []byte) *cpu {
 		gba: gba,
 	}
 
-	c.R[15] = merge4(rom[0:4])
-
 	return c
 }
 
@@ -36,28 +34,31 @@ func (cpu *cpu) step() {
 		os.Exit(0)
 	}
 
-	cpu.instPipeline[0] = cpu.instPipeline[1]
-	cpu.instPipeline[1] = cpu.instPipeline[2]
-
-	cpu.stepThumb()
+	cpu.stepArm()
 }
 
-func (cpu *cpu) stepThumb() {
-	fmt.Printf("[stepThumb] cpu.steps: %v. Instruction pipeline: [0x%08X, 0x%08X, 0x%08X]\n", cpu.steps, cpu.instPipeline[0], cpu.instPipeline[1], cpu.instPipeline[2])
+func (cpu *cpu) stepArm() {
+	fmt.Printf("[stepArm] cpu.steps: %v\n", cpu.steps)
+	fmt.Printf("[stepArm] Instruction pipeline: [0x%08X, 0x%08X, 0x%08X]\n", cpu.instPipeline[0], cpu.instPipeline[1], cpu.instPipeline[2])
 
 	pc := cpu.R[15]
 
-	fmt.Printf("[stepThumb] PC: 0x%08X\n", pc)
+	fmt.Printf("[stepArm] PC: 0x%08X\n", pc)
 
 	// fetch
-	cpu.instPipeline[2] = uint32(cpu.gba.read16(pc))
+	cpu.instPipeline[0] = cpu.instPipeline[1]
+	cpu.instPipeline[1] = cpu.instPipeline[2]
+	cpu.instPipeline[2] = cpu.gba.read32(pc)
 
 	// decode??
 
 	// execute
-	cpu.execThumb()
+	cpu.execArm()
+
+	// incr PC
+	cpu.R[15] = pc + 4
 }
 
-func (cpu *cpu) execThumb() {
-	fmt.Printf("[execThumb] cpu.steps: %v. Executing instruction: %08X\n", cpu.steps, cpu.instPipeline[0])
+func (cpu *cpu) execArm() {
+	fmt.Printf("[execArm] Executing instruction: 0x%08X\n", cpu.instPipeline[0])
 }
