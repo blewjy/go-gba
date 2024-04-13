@@ -21,7 +21,8 @@ type cpu struct {
 
 	registers
 
-	instPipeline [3]uint32
+	instPipeline  [3]uint32
+	flushPipeline bool
 
 	steps uint64
 }
@@ -62,9 +63,27 @@ func (cpu *cpu) stepArm() {
 	// execute
 	cpu.execArm()
 
-	// incr PC
-	cpu.R[15] = cpu.R[15] + 4
+	// todo: supposed to get how many cycles was executed, and then clock the rest of the GBA hardware according to how many cycles have passed?
+	// https://www.reddit.com/r/EmuDev/comments/7y3s1b/yet_another_gba_emulator_question_by_a_total_noob/
+	// cpu.clock()
 
+	// flush
+	if cpu.flushPipeline {
+		cpu.flush()
+		cpu.flushPipeline = false
+	} else {
+		// incr PC
+		cpu.R[15] += 4
+	}
+
+}
+
+// flush will get instruction at PC and slot into pipeline[1], and get instruction at PC+4 and slot into pipeline[2]
+func (cpu *cpu) flush() {
+	cpu.instPipeline[1] = cpu.gba.read32(cpu.R[15])
+	cpu.R[15] += 4
+	cpu.instPipeline[2] = cpu.gba.read32(cpu.R[15])
+	cpu.R[15] += 4
 }
 
 func (cpu *cpu) execArm() {
@@ -82,12 +101,22 @@ func (cpu *cpu) execArm() {
 	switch {
 	case cpu.checkZero(inst):
 		fmt.Printf("[cpu.steps: %v][execArm] Zero instruction, continue first\n", cpu.steps)
+	case cpu.checkArmBlockDataTransfer(inst):
+		cpu.execArmBlockDataTransfer(inst)
 	case cpu.checkArmBranch(inst):
 		cpu.execArmBranch(inst)
 	default:
 		fmt.Printf("[cpu.steps: %v][execArm] Instruction not implemented!\n", cpu.steps)
 		os.Exit(1)
 	}
+}
+
+func (cpu *cpu) checkArmBlockDataTransfer(inst uint32) bool {
+	return inst&0b0000_1110_0100_0000_0000_0000_0000_0000 == 0b0000_1000_0000_0000_0000_0000_0000_0000
+}
+
+func (cpu *cpu) execArmBlockDataTransfer(inst uint32) {
+
 }
 
 type Condition uint8
@@ -170,7 +199,14 @@ func (cpu *cpu) execArmBranch(inst uint32) {
 	L := getBit32(inst, 24)
 	offset := int32(getBitRange32(inst, 23, 0))
 
-	fmt.Printf("[cpu.steps: %v][execArmBranch] L: %01b, offset := %024b (%d)\n", cpu.steps, L, offset, offset)
+	fmt.Printf("[cpu.steps: %v][execArmBranch] L: %01b, offset = %024b (%d)\n", cpu.steps, L, offset, offset)
 
-	cpu.R[15] = addSigned32(cpu.R[15]+8, offset<<2)
+	if L == 1 {
+		cpu.R[14] = cpu.R[15] + 4
+		panic("BL: Branch and Link not implemented")
+	}
+
+	cpu.R[15] = addSigned32(cpu.R[15], offset<<2)
+
+	cpu.flushPipeline = true
 }
